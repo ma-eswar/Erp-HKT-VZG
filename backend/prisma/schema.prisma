@@ -1,0 +1,120 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  FACULTY
+  STUDENT
+}
+
+enum ResultStatus {
+  DRAFT
+  UNDER_REVIEW
+  PUBLISHED
+}
+
+enum AmendmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id                String            @id @default(uuid())
+  email             String            @unique
+  fullName          String
+  role              Role
+  offerings         CourseOffering[]
+  enrollments       Enrollment[]
+  amendmentsMade    ResultAmendment[] @relation("MakerRelation")
+  amendmentsChecked ResultAmendment[] @relation("CheckerRelation")
+  auditActions      AuditLedger[]
+  createdAt         DateTime          @default(now())
+}
+
+model CourseCatalog {
+  id             String           @id @default(uuid())
+  code           String           @unique
+  title          String
+  defaultCredits Int
+  department     String
+  offerings      CourseOffering[]
+}
+
+model CourseOffering {
+  id            String        @id @default(uuid())
+  catalogId     String
+  catalog       CourseCatalog @relation(fields: [catalogId], references: [id])
+  term          String        // e.g. "Fall 2026"
+  frozenTitle   String        // Decoupled snapshot of catalog title
+  frozenCredits Int           // Decoupled snapshot of catalog credits
+  facultyId     String
+  faculty       User          @relation(fields: [facultyId], references: [id])
+  enrollments   Enrollment[]
+  createdAt     DateTime      @default(now())
+}
+
+model Enrollment {
+  id          String             @id @default(uuid())
+  studentId   String
+  student     User               @relation(fields: [studentId], references: [id])
+  offeringId  String
+  offering    CourseOffering     @relation(fields: [offeringId], references: [id])
+  isBarred    Boolean            @default(false)
+  attendance  AttendanceRecord[]
+  result      ExamResult?
+}
+
+model AttendanceRecord {
+  id           String     @id @default(uuid())
+  enrollmentId String
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
+  sessionDate  DateTime
+  isPresent    Boolean
+}
+
+model ExamResult {
+  id              String            @id @default(uuid())
+  enrollmentId    String            @unique
+  enrollment      Enrollment        @relation(fields: [enrollmentId], references: [id])
+  marks           Float?
+  status          ResultStatus      @default(DRAFT)
+  version         Int               @default(1) // OCC Version Lock
+  revisionNumber  Int               @default(1)
+  amendments      ResultAmendment[]
+  updatedAt       DateTime          @updatedAt
+}
+
+model ResultAmendment {
+  id            String          @id @default(uuid())
+  resultId      String
+  result        ExamResult      @relation(fields: [resultId], references: [id])
+  makerId       String
+  maker         User            @relation("MakerRelation", fields: [makerId], references: [id])
+  checkerId     String?
+  checker       User?           @relation("CheckerRelation", fields: [checkerId], references: [id])
+  originalMarks Float
+  proposedMarks Float
+  justification String
+  status        AmendmentStatus @default(PENDING)
+  createdAt     DateTime        @default(now())
+  resolvedAt    DateTime?
+}
+
+model AuditLedger {
+  id         String   @id @default(uuid())
+  entityName String
+  entityId   String
+  actorId    String
+  actor      User     @relation(fields: [actorId], references: [id])
+  actionType String
+  beforeState Json
+  afterState  Json
+  timestamp  DateTime @default(now())
+}
