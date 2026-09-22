@@ -156,4 +156,39 @@ export class ResultsService {
             status: 'PUBLISHED',
         };
     }
+
+    // 4. Student Portal: Fetch Published Grades
+    async getStudentGrades(studentId: string) {
+        const enrollments = await this.prisma.enrollment.findMany({
+            where: { studentId },
+            include: {
+                offering: {
+                    include: {
+                        catalog: true,
+                        faculty: {
+                            select: { id: true, fullName: true, email: true },
+                        },
+                    },
+                },
+                result: true,
+            },
+        });
+
+        // Strict Policy: Draft or under review marks must NEVER be leaked to students!
+        const publishedEnrollments = enrollments.filter(
+            (enr) => enr.result && enr.result.status === ResultStatus.PUBLISHED,
+        );
+
+        return publishedEnrollments.map((enr) => ({
+            resultId: enr.result!.id,
+            courseCode: enr.offering.catalog.code,
+            courseTitle: enr.offering.frozenTitle || enr.offering.catalog.title,
+            term: enr.offering.term,
+            credits: enr.offering.frozenCredits || enr.offering.catalog.defaultCredits,
+            marks: enr.result!.marks,
+            revisionNumber: enr.result!.revisionNumber,
+            publishedAt: enr.result!.updatedAt,
+            facultyName: enr.offering.faculty?.fullName,
+        }));
+    }
 }

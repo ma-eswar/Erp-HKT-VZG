@@ -2,6 +2,7 @@ import {
     Controller,
     Patch,
     Post,
+    Get,
     Param,
     Body,
     UseGuards,
@@ -19,6 +20,12 @@ import { ResultOwnerGuard } from './guards/result-owner.guard';
 @Controller()
 export class ResultsController {
     constructor(private readonly resultsService: ResultsService) { }
+
+    @Get('results/student/my-grades')
+    @ApiOperation({ summary: 'Retrieve published grades for the authenticated student' })
+    async getMyGrades(@Req() req: any) {
+        return this.resultsService.getStudentGrades(req.user.userId);
+    }
 
     @Patch('results/:id/mark')
     @UseGuards(ResultOwnerGuard)
